@@ -90,6 +90,7 @@ const DATASETS = {
   // California Medicaid Formulary
   CALIFORNIA_MEDICAID_FORMULARY: {
     id: 'ca-medi-cal-formulary',
+    state: 'CA',
     downloadUrl: 'https://medi-calrx.dhcs.ca.gov/cms/medicalrx/static-assets/documents/provider/forms-and-information/cdl/Medi-Cal_Rx_Approved_NDC_List.xlsx',
     name: 'California Medi-Cal Rx Approved NDC List',
     category: 'formulary',
@@ -99,6 +100,21 @@ const DATASETS = {
     estimatedSize: '1.7 MB',
     estimatedRecords: '40,326',
     accessMethod: 'excel'  // Excel download + in-memory cache
+  },
+
+  // Texas Medicaid Formulary
+  TEXAS_MEDICAID_FORMULARY: {
+    id: 'tx-vdp-formulary',
+    state: 'TX',
+    downloadUrl: 'https://www.txvendordrug.com/sites/default/files/docs/data--formulary--drug.txt',
+    name: 'Texas Vendor Drug Program Formulary',
+    category: 'formulary',
+    update_frequency: 'weekly',
+    description: 'Texas Medicaid formulary with NDC codes, PA requirements, pricing data, and multi-program eligibility (covers 4.4M beneficiaries - 6% of all Medicaid)',
+    cacheTime: 7 * 24 * 60 * 60 * 1000,  // 7 days (weekly updates)
+    estimatedSize: '1.63 MB',
+    estimatedRecords: '4,701',
+    accessMethod: 'text'  // Pipe-delimited text download + in-memory cache
   }
 };
 
@@ -115,6 +131,8 @@ function getDataset(category, purpose) {
         return DATASETS.FEDERAL_UPPER_LIMITS;
       } else if (purpose === 'ca_formulary') {
         return DATASETS.CALIFORNIA_MEDICAID_FORMULARY;
+      } else if (purpose === 'tx_formulary') {
+        return DATASETS.TEXAS_MEDICAID_FORMULARY;
       }
       return DATASETS.NADAC_2024;
 
@@ -125,11 +143,37 @@ function getDataset(category, purpose) {
       return DATASETS.DRUG_UTILIZATION;
 
     case 'formulary':
+      // If purpose is a state code, return that state's formulary
+      if (purpose === 'CA') {
+        return DATASETS.CALIFORNIA_MEDICAID_FORMULARY;
+      } else if (purpose === 'TX') {
+        return DATASETS.TEXAS_MEDICAID_FORMULARY;
+      }
+      // Default to California for backward compatibility
       return DATASETS.CALIFORNIA_MEDICAID_FORMULARY;
 
     default:
       throw new Error(`Unknown dataset category: ${category}`);
   }
+}
+
+/**
+ * Get formulary dataset by state code
+ * @param {string} state - State code (CA, TX)
+ * @returns {Object} Dataset configuration
+ */
+function getFormularyByState(state) {
+  const stateUpper = state.toUpperCase();
+
+  const formularyDatasets = Object.values(DATASETS).filter(ds =>
+    ds.category === 'formulary' && ds.state === stateUpper
+  );
+
+  if (formularyDatasets.length === 0) {
+    throw new Error(`No formulary data available for state: ${state}`);
+  }
+
+  return formularyDatasets[0];
 }
 
 /**
@@ -152,6 +196,7 @@ function listDatasets() {
 module.exports = {
   DATASETS,
   getDataset,
+  getFormularyByState,
   getDatasetsByCategory,
   listDatasets
 };

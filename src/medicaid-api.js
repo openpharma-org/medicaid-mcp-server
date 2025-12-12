@@ -6,8 +6,9 @@
  */
 
 const { cache } = require('./cache-manager');
-const { getDataset } = require('./datasets');
+const { getDataset, getFormularyByState } = require('./datasets');
 const { downloadAndParseExcel, searchFormulary } = require('./excel-parser');
+const { downloadAndParseText, searchTexasFormulary } = require('./text-parser');
 const {
   formatDateRange,
   parseEnrollmentData,
@@ -339,56 +340,123 @@ async function searchDatasets(params) {
 }
 
 /**
- * Get California Medicaid Formulary data (downloads and caches Excel)
+ * Get state formulary data (downloads and caches based on format)
+ * @param {string} state - State code (CA, TX)
+ * @returns {Promise<Array>} Parsed formulary records
  */
-async function getCaliforniaFormularyData() {
-  const dataset = getDataset('drug_pricing', 'ca_formulary');
+async function getStateFormularyData(state) {
+  const dataset = getFormularyByState(state);
 
   if (!dataset.downloadUrl) {
-    throw new Error('California Formulary Excel download URL not configured');
+    throw new Error(`${state} Formulary download URL not configured`);
   }
 
-  return cache.get('CA_FORMULARY', async () => {
-    return downloadAndParseExcel(dataset.downloadUrl);
+  const cacheKey = `${state}_FORMULARY`;
+
+  return cache.get(cacheKey, async () => {
+    if (dataset.accessMethod === 'excel') {
+      return downloadAndParseExcel(dataset.downloadUrl);
+    } else if (dataset.accessMethod === 'text') {
+      return downloadAndParseText(dataset.downloadUrl);
+    } else {
+      throw new Error(`Unsupported access method: ${dataset.accessMethod}`);
+    }
   }, dataset.cacheTime);
 }
 
 /**
- * Search California Medicaid Formulary
+ * Search State Medicaid Formulary (unified method for all states)
  * @param {Object} params - Search parameters
- * @returns {Promise<Object>} Search results
+ * @param {string} params.state - State code (CA, TX) - REQUIRED
+ * @param {string} params.ndc - NDC code filter
+ * @param {string} params.generic_name - Generic name filter
+ * @param {string} params.label_name - Brand/label name filter
+ * @param {boolean} params.requires_pa - Prior authorization filter
+ * @param {number} params.limit - Result limit (default: 100)
+ * @returns {Promise<Object>} Search results with statistics
  */
-async function searchCaliforniaFormulary(params = {}) {
-  const data = await getCaliforniaFormularyData();
+async function searchStateFormulary(params = {}) {
+  if (!params.state) {
+    throw new Error('state parameter is required (e.g., "CA", "TX")');
+  }
 
-  const results = searchFormulary(data, {
-    ndc: params.ndc,
-    generic_name: params.generic_name,
-    label_name: params.label_name,
-    requires_pa: params.requires_pa,
-    extended_duration: params.extended_duration,
-    tier: params.tier,
-    limit: params.limit || 100
-  });
+  const stateUpper = params.state.toUpperCase();
+  const dataset = getFormularyByState(stateUpper);
+  const data = await getStateFormularyData(stateUpper);
 
-  // Calculate statistics
-  const stats = {
+  let results;
+
+  // Use state-specific search function based on data structure
+  if (stateUpper === 'CA') {
+    results = searchFormulary(data, {
+      ndc: params.ndc,
+      generic_name: params.generic_name,
+      label_name: params.label_name,
+      requires_pa: params.requires_pa,
+      extended_duration: params.extended_duration,
+      tier: params.tier,
+      limit: params.limit || 100
+    });
+  } else if (stateUpper === 'TX') {
+    results = searchTexasFormulary(data, {
+      ndc: params.ndc,
+      generic_name: params.generic_name,
+      label_name: params.label_name,
+      requires_pa: params.requires_pa,
+      pdl_pa: params.pdl_pa,
+      clinical_pa: params.clinical_pa,
+      program: params.program,
+      max_price: params.max_price,
+      min_price: params.min_price,
+      limit: params.limit || 100
+    });
+  } else {
+    throw new Error(`Search not implemented for state: ${stateUpper}`);
+  }
+
+  // Calculate state-specific statistics
+  let stats = {
     total_records: data.length,
     matching_records: results.length,
     unique_generic_drugs: new Set(results.map(r => r.generic_name)).size,
-    pa_required_count: results.filter(r => r.prior_authorization).length,
-    extended_duration_count: results.filter(r => r.extended_duration_drug).length,
-    brand_count: results.filter(r => r.cost_ceiling_tier === 'Brand').length,
-    generic_count: results.filter(r => r.cost_ceiling_tier === 'Generic').length
+    pa_required_count: results.filter(r => r.prior_authorization).length
   };
 
+  // Add CA-specific stats
+  if (stateUpper === 'CA') {
+    stats.extended_duration_count = results.filter(r => r.extended_duration_drug).length;
+    stats.brand_count = results.filter(r => r.cost_ceiling_tier === 'Brand').length;
+    stats.generic_count = results.filter(r => r.cost_ceiling_tier === 'Generic').length;
+  }
+
+  // Add TX-specific stats
+  if (stateUpper === 'TX') {
+    stats.medicaid_active_count = results.filter(r => r.medicaid_active).length;
+    stats.chip_active_count = results.filter(r => r.chip_active).length;
+    stats.pdl_pa_required_count = results.filter(r => r.pdl_pa_required).length;
+    stats.clinical_pa_required_count = results.filter(r => r.clinical_pa_required).length;
+    stats.avg_retail_price = results.filter(r => r.retail_price !== null).length > 0
+      ? (results.filter(r => r.retail_price !== null).reduce((sum, r) => sum + r.retail_price, 0) /
+         results.filter(r => r.retail_price !== null).length).toFixed(2)
+      : null;
+  }
+
   return {
-    state: 'California',
-    dataset: 'Medi-Cal Rx Approved NDC List',
+    state: stateUpper,
+    state_name: stateUpper === 'CA' ? 'California' : stateUpper === 'TX' ? 'Texas' : stateUpper,
+    dataset: dataset.name,
     query_params: params,
     statistics: stats,
     results: results
   };
+}
+
+/**
+ * Search California Medicaid Formulary (backward compatibility wrapper)
+ * @deprecated Use searchStateFormulary({ state: 'CA', ... }) instead
+ */
+async function searchCaliforniaFormulary(params = {}) {
+  return searchStateFormulary({ ...params, state: 'CA' });
 }
 
 module.exports = {
@@ -397,7 +465,8 @@ module.exports = {
   getEnrollmentTrends,
   compareStateEnrollment,
   getDrugRebateInfo,
-  searchCaliforniaFormulary,
+  searchStateFormulary,
+  searchCaliforniaFormulary,  // Backward compatibility
   listAvailableDatasets,
   searchDatasets
 };

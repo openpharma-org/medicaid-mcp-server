@@ -172,7 +172,29 @@ result = medicaid_info(
    }
    ```
 
-10. **search_california_formulary** - California Medi-Cal formulary search (Excel)
+10. **search_state_formulary** - Unified state formulary search (CA, TX)
+    ```javascript
+    {
+      "method": "search_state_formulary",
+      "state": "CA",  // or "TX"
+      "generic_name": "semaglutide",
+      "requires_pa": false,
+      "limit": 10
+    }
+    ```
+
+    **California-specific parameters**:
+    - `tier` - Cost ceiling tier ("Brand" or "Generic")
+    - `extended_duration` - Extended duration eligibility (true/false)
+
+    **Texas-specific parameters**:
+    - `pdl_pa` - PDL prior authorization (true/false)
+    - `clinical_pa` - Clinical prior authorization (true/false)
+    - `program` - Program filter ("medicaid", "chip", "cshcn", "khc", "htw", "htwplus")
+    - `max_price` - Maximum retail price
+    - `min_price` - Minimum retail price
+
+11. **search_california_formulary** - California formulary (backward compatibility)
     ```javascript
     {
       "method": "search_california_formulary",
@@ -182,6 +204,7 @@ result = medicaid_info(
       "limit": 10
     }
     ```
+    **Note**: Deprecated - Use `search_state_formulary` with `state: "CA"` instead
 
 ## Data Sources
 
@@ -193,14 +216,23 @@ result = medicaid_info(
 | Drug rebate program | Quarterly | 291 MB | ~3M | DKAN API | ✓ Available |
 | Drug utilization | Quarterly | 192 MB | 5.3M | DKAN API | ✓ Available |
 | **California Medicaid formulary** | **Monthly** | **1.7 MB** | **40K** | **Excel + cache** | **✓ Available** |
+| **Texas Medicaid formulary** | **Weekly** | **1.63 MB** | **4.7K** | **Text + cache** | **✓ Available** |
 
-**Architecture**: Hybrid approach - CSV/Excel for small datasets (<50 MB), DKAN API for large datasets (>100 MB). This avoids memory issues while maintaining fast queries.
+**Architecture**: Hybrid approach - CSV/Excel/Text for small datasets (<50 MB), DKAN API for large datasets (>100 MB). This avoids memory issues while maintaining fast queries.
+
+**Coverage**: California (15M beneficiaries - 20% of US Medicaid) + Texas (4.4M beneficiaries - 6% of US Medicaid) = **27% of all US Medicaid beneficiaries**.
 
 ## Testing
 
 ```bash
 # Test CSV implementation (ibuprofen pricing, CA enrollment)
 node test-fixed-implementation.js
+
+# Test unified state formulary (California + Texas)
+node test-unified-formulary.js
+
+# Test California formulary only
+node test-ca-formulary.js
 
 # Inspect CSV column structure
 node inspect-csv-columns.js
