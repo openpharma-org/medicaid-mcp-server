@@ -2,43 +2,49 @@
  * Illinois Medicaid Formulary Enrichment
  *
  * Cross-state NDC matching strategy:
- * - Load Illinois PDL (5,723 drugs, drug names only)
- * - Match IL drug names to CA/NY formularies
+ * - Load Illinois PDL (5,729 drugs, drug names only)
+ * - Match IL drug names to CA/NY/OH formularies
  * - Get NDC codes from matched drugs
  * - Enrich with NADAC pricing
- * - 65% match rate (3,720 of 5,723 drugs)
+ * - 51-52% estimated match rate (2,900+ of 5,729 drugs)
+ * - Ohio adds unique coverage for medical devices/supplies
  */
 
 const { getFormularyByState } = require('./datasets');
 const { downloadAndParseExcel } = require('./excel-parser');
 const { downloadAndParseCSV } = require('./csv-parser');
+const { downloadAndParseJSON } = require('./json-parser');
 const { cache } = require('./cache-manager');
+const XLSX = require('xlsx');
+const axios = require('axios');
 
 /**
  * Parse Illinois PDL from raw Excel data
- * @param {Array} rows - Raw rows from Excel parser
+ * @param {Array} rows - Raw rows from Excel parser (array of arrays)
  * @returns {Array} Illinois PDL drugs (drug names, PA requirements)
  */
 function parseIllinoisPDL(rows) {
   console.log(`[IL Enrichment] Parsing Illinois PDL...`);
 
-  // IL PDL structure (from previous analysis):
-  // Row 41 onward: drug data
+  // IL PDL structure (from inspection):
+  // Row 40 (index 39): Headers ["Drug Class", "Drug Name", "Dosage Form", "PDL Status", "", ""]
+  // Row 41+ (index 40+): Drug data
+  // Column A (index 0): Drug Class (only on first drug in class)
   // Column B (index 1): Drug Name
   // Column C (index 2): Dosage Form
-  // Column E/F (index 4/5): PDL Status
+  // Column D/E (index 3/4): PDL Status (one of these has the status)
 
   const drugs = [];
 
-  // IL PDL file has headers and content starting around row 40
+  // Start from row 41 (index 40) - data rows
   for (let i = 40; i < rows.length; i++) {
     const row = rows[i];
-    if (!row) continue;  // Skip empty rows
+    if (!row || !Array.isArray(row)) continue;  // Skip empty/invalid rows
 
-    // Extract fields (row is object with column headers as keys)
-    const drugName = String(row['Drug Name'] || row['B'] || row[Object.keys(row)[1]] || '').trim();
-    const dosageForm = String(row['Dosage Form'] || row['C'] || row[Object.keys(row)[2]] || '').trim();
-    const pdlStatus = String(row['PDL Status'] || row['E'] || row['F'] || row[Object.keys(row)[4]] || row[Object.keys(row)[5]] || '').trim();
+    // Extract fields from array (row[0]=Drug Class, row[1]=Drug Name, etc.)
+    const drugName = String(row[1] || '').trim();
+    const dosageForm = String(row[2] || '').trim();
+    const pdlStatus = String(row[4] || row[5] || row[3] || '').trim();  // Check columns D, E, F
 
     if (drugName && drugName.length > 0) {
       drugs.push({
@@ -59,13 +65,15 @@ function parseIllinoisPDL(rows) {
  * @param {Array} ilDrugs - Illinois PDL drugs
  * @param {Array} caFormulary - California formulary
  * @param {Array} nyFormulary - New York formulary
+ * @param {Array} ohFormulary - Ohio formulary
  * @returns {Array} Enriched IL drugs with NDC codes (where available)
  */
-function enrichIllinoisWithCrossStateNDC(ilDrugs, caFormulary, nyFormulary) {
+function enrichIllinoisWithCrossStateNDC(ilDrugs, caFormulary, nyFormulary, ohFormulary) {
   console.log(`[IL Enrichment] Starting cross-state NDC matching...`);
   console.log(`  - IL drugs: ${ilDrugs.length}`);
   console.log(`  - CA formulary: ${caFormulary.length} drugs`);
   console.log(`  - NY formulary: ${nyFormulary.length} drugs`);
+  console.log(`  - OH formulary: ${ohFormulary.length} drugs`);
 
   // Create lookup maps for CA and NY (by drug name, uppercase)
   const caMap = new Map();
@@ -90,8 +98,24 @@ function enrichIllinoisWithCrossStateNDC(ilDrugs, caFormulary, nyFormulary) {
     }
   });
 
+  const ohMap = new Map();
+  ohFormulary.forEach(drug => {
+    const name = (drug.NDC_LABEL_NAME || '').toUpperCase().trim();
+    if (name) {
+      if (!ohMap.has(name)) {
+        ohMap.set(name, []);
+      }
+      ohMap.get(name).push({
+        ndc: drug.NDC,
+        label_name: drug.NDC_LABEL_NAME,
+        generic_name: drug.NDC_LABEL_NAME
+      });
+    }
+  });
+
   console.log(`  - CA unique names: ${caMap.size}`);
   console.log(`  - NY unique names: ${nyMap.size}`);
+  console.log(`  - OH unique names: ${ohMap.size}`);
 
   // Match IL drugs to CA/NY
   let matchCount = 0;
@@ -126,6 +150,20 @@ function enrichIllinoisWithCrossStateNDC(ilDrugs, caFormulary, nyFormulary) {
       };
     }
 
+    // Try exact match in OH
+    let ohMatch = ohMap.get(ilName);
+    if (ohMatch && ohMatch.length > 0) {
+      matchCount++;
+      return {
+        ...ilDrug,
+        ndc: ohMatch[0].ndc,
+        generic_name: ohMatch[0].generic_name,
+        label_name: ohMatch[0].label_name,
+        ndc_source: 'OH',
+        match_confidence: 'high'
+      };
+    }
+
     // Try partial match (first 3 words) for multi-word drugs
     const firstWords = ilName.split(' ').slice(0, 3).join(' ');
     if (firstWords.length > 0) {
@@ -156,6 +194,20 @@ function enrichIllinoisWithCrossStateNDC(ilDrugs, caFormulary, nyFormulary) {
           };
         }
       }
+
+      for (const [ohName, ohDrugs] of ohMap.entries()) {
+        if (ohName.startsWith(firstWords) || firstWords.startsWith(ohName.split(' ').slice(0, 3).join(' '))) {
+          matchCount++;
+          return {
+            ...ilDrug,
+            ndc: ohDrugs[0].ndc,
+            generic_name: ohDrugs[0].generic_name,
+            label_name: ohDrugs[0].label_name,
+            ndc_source: 'OH',
+            match_confidence: 'medium'
+          };
+        }
+      }
     }
 
     // No match - return drug without NDC
@@ -178,21 +230,58 @@ function enrichIllinoisWithCrossStateNDC(ilDrugs, caFormulary, nyFormulary) {
 }
 
 /**
+ * Download and parse Illinois PDL Excel file
+ * @param {string} url - Illinois PDL Excel URL
+ * @returns {Promise<Array>} Raw Illinois PDL rows
+ */
+async function downloadIllinoisPDL(url) {
+  console.log(`[IL Enrichment] Downloading Illinois PDL from ${url}...`);
+
+  const response = await axios.get(url, {
+    responseType: 'arraybuffer',
+    timeout: 60000,  // 60 seconds
+    maxContentLength: 10 * 1024 * 1024  // 10 MB max
+  });
+
+  console.log(`[IL Enrichment] Downloaded ${response.data.byteLength} bytes`);
+
+  // Parse Excel workbook
+  const workbook = XLSX.read(response.data, { type: 'buffer' });
+
+  // Get "Published PDL" sheet
+  const sheetName = 'Published PDL';
+  if (!workbook.SheetNames.includes(sheetName)) {
+    throw new Error(`Sheet "${sheetName}" not found in Illinois PDL Excel file`);
+  }
+
+  const sheet = workbook.Sheets[sheetName];
+
+  // Convert to array of arrays (row-based)
+  const rows = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,  // Return as array of arrays
+    defval: ''
+  });
+
+  console.log(`[IL Enrichment] Parsed ${rows.length} rows from Illinois PDL`);
+  return rows;
+}
+
+/**
  * Get enriched Illinois formulary data
- * @returns {Promise<Array>} Illinois formulary enriched with CA/NY NDC codes
+ * @returns {Promise<Array>} Illinois formulary enriched with CA/NY/OH NDC codes
  */
 async function getEnrichedIllinoisFormulary() {
   const ilDataset = getFormularyByState('IL');
   const caDataset = getFormularyByState('CA');
   const nyDataset = getFormularyByState('NY');
+  const ohDataset = getFormularyByState('OH');
 
   return cache.get('IL_ENRICHED_FORMULARY', async () => {
-    // Step 1: Load Illinois PDL using existing Excel parser
-    console.log(`[IL Enrichment] Downloading Illinois PDL from ${ilDataset.downloadUrl}...`);
-    const ilRawData = await downloadAndParseExcel(ilDataset.downloadUrl);
+    // Step 1: Load Illinois PDL (raw Excel rows)
+    const ilRawData = await downloadIllinoisPDL(ilDataset.downloadUrl);
     const ilDrugs = parseIllinoisPDL(ilRawData);
 
-    // Step 2: Load CA and NY formularies (from cache if available)
+    // Step 2: Load CA, NY, and OH formularies (from cache if available)
     const caFormulary = await cache.get('CA_FORMULARY', async () => {
       return downloadAndParseExcel(caDataset.downloadUrl);
     }, caDataset.cacheTime);
@@ -201,8 +290,12 @@ async function getEnrichedIllinoisFormulary() {
       return downloadAndParseCSV(nyDataset.downloadUrl);
     }, nyDataset.cacheTime);
 
+    const ohFormulary = await cache.get('OH_FORMULARY', async () => {
+      return downloadAndParseJSON(ohDataset.downloadUrl);
+    }, ohDataset.cacheTime);
+
     // Step 3: Enrich IL drugs with cross-state NDC matching
-    const enriched = enrichIllinoisWithCrossStateNDC(ilDrugs, caFormulary, nyFormulary);
+    const enriched = enrichIllinoisWithCrossStateNDC(ilDrugs, caFormulary, nyFormulary, ohFormulary);
 
     return enriched;
   }, ilDataset.cacheTime);

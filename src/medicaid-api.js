@@ -679,6 +679,7 @@ async function searchStateFormulary(params = {}) {
     stats.enrichment_rate = ((stats.with_ndc_count / results.length) * 100).toFixed(1) + '%';
     stats.ca_source_count = results.filter(r => r.ndc_source === 'CA').length;
     stats.ny_source_count = results.filter(r => r.ndc_source === 'NY').length;
+    stats.oh_source_count = results.filter(r => r.ndc_source === 'OH').length;
     stats.high_confidence_count = results.filter(r => r.match_confidence === 'high').length;
     stats.medium_confidence_count = results.filter(r => r.match_confidence === 'medium').length;
   }

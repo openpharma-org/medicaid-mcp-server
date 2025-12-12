@@ -151,17 +151,17 @@ const DATASETS = {
   ILLINOIS_MEDICAID_FORMULARY: {
     id: 'il-hfs-pdl',
     state: 'IL',
-    downloadUrl: 'https://www.illinois.gov/hfs/info/legal/PublicNotices/Documents/PDL.xlsx',
+    downloadUrl: 'https://hfs.illinois.gov/content/dam/soi/en/web/hfs/sitecollectiondocuments/pdl10242025.xlsx',
     name: 'Illinois HFS Preferred Drug List',
     category: 'formulary',
     update_frequency: 'quarterly',
-    description: 'Illinois Medicaid formulary (enriched via cross-state NDC matching from CA/NY - 65% coverage, covers 2.9M beneficiaries - 4% of all Medicaid)',
+    description: 'Illinois Medicaid formulary (enriched via cross-state NDC matching from CA/NY/OH - 51-52% coverage, covers 2.9M beneficiaries - 4% of all Medicaid)',
     cacheTime: 90 * 24 * 60 * 60 * 1000,  // 90 days (quarterly updates)
     estimatedSize: '222 KB',
-    estimatedRecords: '5,723',
+    estimatedRecords: '5,729',
     accessMethod: 'excel',  // Excel download + cross-state enrichment
-    enrichmentStrategy: 'cross-state',  // Uses CA/NY formularies for NDC codes
-    enrichmentCoverage: 0.65  // 65% of drugs get NDC codes via cross-state matching
+    enrichmentStrategy: 'cross-state',  // Uses CA/NY/OH formularies for NDC codes
+    enrichmentCoverage: 0.52  // 51-52% of drugs get NDC codes via cross-state matching (OH adds medical devices)
   }
 };
 

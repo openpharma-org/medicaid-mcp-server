@@ -27,6 +27,7 @@ async function testIllinoisFormulary() {
     console.log(`  Without NDC: ${ozempicResults.statistics.without_ndc_count}`);
     console.log(`  CA source: ${ozempicResults.statistics.ca_source_count}`);
     console.log(`  NY source: ${ozempicResults.statistics.ny_source_count}`);
+    console.log(`  OH source: ${ozempicResults.statistics.oh_source_count}`);
     console.log(`  High confidence: ${ozempicResults.statistics.high_confidence_count}`);
 
     console.log('\n  Sample Results:');
