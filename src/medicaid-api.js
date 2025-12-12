@@ -9,6 +9,7 @@ const { cache } = require('./cache-manager');
 const { getDataset, getFormularyByState } = require('./datasets');
 const { downloadAndParseExcel, searchFormulary } = require('./excel-parser');
 const { downloadAndParseText, searchTexasFormulary } = require('./text-parser');
+const { downloadAndParseCSV } = require('./csv-parser');
 const {
   formatDateRange,
   parseEnrollmentData,
@@ -358,6 +359,8 @@ async function getStateFormularyData(state) {
       return downloadAndParseExcel(dataset.downloadUrl);
     } else if (dataset.accessMethod === 'text') {
       return downloadAndParseText(dataset.downloadUrl);
+    } else if (dataset.accessMethod === 'csv') {
+      return downloadAndParseCSV(dataset.downloadUrl);
     } else {
       throw new Error(`Unsupported access method: ${dataset.accessMethod}`);
     }
@@ -365,19 +368,93 @@ async function getStateFormularyData(state) {
 }
 
 /**
+ * Search New York Medicaid Formulary
+ * @param {Array} data - Parsed NY formulary data
+ * @param {Object} params - Search parameters
+ * @returns {Array} Filtered results
+ */
+function searchNewYorkFormulary(data, params) {
+  let filtered = data;
+
+  // Filter by NDC
+  if (params.ndc) {
+    const normalizedNDC = params.ndc.replace(/-/g, '');
+    filtered = filtered.filter(row => {
+      const rowNDC = (row.ndc || '').replace(/-/g, '');
+      return rowNDC.includes(normalizedNDC);
+    });
+  }
+
+  // Filter by generic name
+  if (params.generic_name) {
+    const searchTerm = params.generic_name.toLowerCase();
+    filtered = filtered.filter(row =>
+      (row.generic_name || '').toLowerCase().includes(searchTerm)
+    );
+  }
+
+  // Filter by label/brand name
+  if (params.label_name) {
+    const searchTerm = params.label_name.toLowerCase();
+    filtered = filtered.filter(row =>
+      (row.label_name || '').toLowerCase().includes(searchTerm)
+    );
+  }
+
+  // Filter by prior authorization requirement
+  if (params.requires_pa !== undefined) {
+    filtered = filtered.filter(row =>
+      row.prior_authorization === params.requires_pa
+    );
+  }
+
+  // Filter by preferred drug status
+  if (params.preferred !== undefined) {
+    filtered = filtered.filter(row =>
+      row.preferred_drug === params.preferred
+    );
+  }
+
+  // Filter by brand vs generic
+  if (params.is_brand !== undefined) {
+    filtered = filtered.filter(row =>
+      row.is_brand === params.is_brand
+    );
+  }
+
+  // Filter by MRA cost range
+  if (params.max_price !== undefined) {
+    filtered = filtered.filter(row =>
+      row.mra_cost !== null && row.mra_cost <= params.max_price
+    );
+  }
+
+  if (params.min_price !== undefined) {
+    filtered = filtered.filter(row =>
+      row.mra_cost !== null && row.mra_cost >= params.min_price
+    );
+  }
+
+  // Apply limit
+  const limit = params.limit || 100;
+  return filtered.slice(0, limit);
+}
+
+/**
  * Search State Medicaid Formulary (unified method for all states)
  * @param {Object} params - Search parameters
- * @param {string} params.state - State code (CA, TX) - REQUIRED
+ * @param {string} params.state - State code (CA, TX, NY) - REQUIRED
  * @param {string} params.ndc - NDC code filter
  * @param {string} params.generic_name - Generic name filter
  * @param {string} params.label_name - Brand/label name filter
  * @param {boolean} params.requires_pa - Prior authorization filter
+ * @param {boolean} params.preferred - Preferred drug filter (NY only)
  * @param {number} params.limit - Result limit (default: 100)
  * @returns {Promise<Object>} Search results with statistics
  */
 async function searchStateFormulary(params = {}) {
   if (!params.state) {
-    throw new Error('state parameter is required (e.g., "CA", "TX")');
+    throw new Error('state parameter is required (e.g., "CA", "TX", "NY")');
   }
 
   const stateUpper = params.state.toUpperCase();
@@ -478,6 +555,19 @@ async function searchStateFormulary(params = {}) {
       min_price: params.min_price,
       limit: params.limit || 100
     });
+  } else if (stateUpper === 'NY') {
+    // New York formulary search
+    results = searchNewYorkFormulary(data, {
+      ndc: params.ndc,
+      generic_name: params.generic_name,
+      label_name: params.label_name,
+      requires_pa: params.requires_pa,
+      preferred: params.preferred,
+      is_brand: params.is_brand,
+      max_price: params.max_price,
+      min_price: params.min_price,
+      limit: params.limit || 100
+    });
   } else {
     throw new Error(`Search not implemented for state: ${stateUpper}`);
   }
@@ -523,9 +613,26 @@ async function searchStateFormulary(params = {}) {
       : null;
   }
 
+  // Add NY-specific stats
+  if (stateUpper === 'NY') {
+    stats.brand_count = results.filter(r => r.is_brand).length;
+    stats.generic_count = results.filter(r => r.is_generic).length;
+    stats.preferred_count = results.filter(r => r.preferred_drug).length;
+    stats.with_pricing_count = results.filter(r => r.mra_cost !== null).length;
+
+    // Calculate average MRA pricing
+    const productsWithPricing = results.filter(r => r.mra_cost !== null);
+    if (productsWithPricing.length > 0) {
+      stats.avg_mra_cost = (
+        productsWithPricing.reduce((sum, r) => sum + r.mra_cost, 0) /
+        productsWithPricing.length
+      ).toFixed(2);
+    }
+  }
+
   return {
     state: stateUpper,
-    state_name: stateUpper === 'CA' ? 'California' : stateUpper === 'TX' ? 'Texas' : stateUpper,
+    state_name: stateUpper === 'CA' ? 'California' : stateUpper === 'TX' ? 'Texas' : stateUpper === 'NY' ? 'New York' : stateUpper,
     dataset: dataset.name,
     query_params: params,
     statistics: stats,

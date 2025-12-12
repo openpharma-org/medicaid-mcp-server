@@ -172,11 +172,11 @@ result = medicaid_info(
    }
    ```
 
-10. **search_state_formulary** - Unified state formulary search with **AUTOMATIC PRICING** (CA, TX)
+10. **search_state_formulary** - Unified state formulary search with **AUTOMATIC PRICING** (CA, TX, NY)
     ```javascript
     {
       "method": "search_state_formulary",
-      "state": "CA",  // or "TX"
+      "state": "CA",  // or "TX", "NY"
       "generic_name": "semaglutide",
       "requires_pa": false,
       "limit": 10
@@ -189,6 +189,9 @@ result = medicaid_info(
       - Formula: `(NADAC × package size) + $10.05 dispensing fee`
     - **Texas**: Native state pricing (already included)
       - Returns: `retail_price`, `price_340b`, `ltc_price`, `specialty_price`
+    - **New York**: Native MRA pricing (Maximum Reimbursable Amount)
+      - Returns: `mra_cost`, `pricing_unit`, `maximum_quantity`, `refills_allowed`
+      - Daily updates (most current pricing!)
 
     **California-specific parameters**:
     - `tier` - Cost ceiling tier ("Brand" or "Generic")
@@ -200,6 +203,12 @@ result = medicaid_info(
     - `program` - Program filter ("medicaid", "chip", "cshcn", "khc", "htw", "htwplus")
     - `max_price` - Maximum retail price
     - `min_price` - Minimum retail price
+
+    **New York-specific parameters**:
+    - `preferred` - Preferred drug status (true/false)
+    - `is_brand` - Brand vs generic filter (true/false)
+    - `max_price` - Maximum MRA cost
+    - `min_price` - Minimum MRA cost
 
     **Example Response (California with NADAC pricing)**:
     ```javascript
@@ -249,10 +258,11 @@ result = medicaid_info(
 | Drug utilization | Quarterly | 192 MB | 5.3M | DKAN API | ✓ Available |
 | **California Medicaid formulary** | **Monthly** | **1.7 MB** | **40K** | **Excel + cache** | **✓ Available** |
 | **Texas Medicaid formulary** | **Weekly** | **1.63 MB** | **4.7K** | **Text + cache** | **✓ Available** |
+| **New York Medicaid formulary** | **Daily** | **4.97 MB** | **37.7K** | **CSV + cache** | **✓ Available** |
 
 **Architecture**: Hybrid approach - CSV/Excel/Text for small datasets (<50 MB), DKAN API for large datasets (>100 MB). This avoids memory issues while maintaining fast queries.
 
-**Coverage**: California (15M beneficiaries - 20% of US Medicaid) + Texas (4.4M beneficiaries - 6% of US Medicaid) = **27% of all US Medicaid beneficiaries**.
+**Coverage**: California (15M - 20%) + Texas (4.4M - 6%) + New York (6.5M - 9%) = **35% of all US Medicaid beneficiaries** (25.9M total).
 
 ## Testing
 
@@ -260,11 +270,17 @@ result = medicaid_info(
 # Test CSV implementation (ibuprofen pricing, CA enrollment)
 node test-fixed-implementation.js
 
-# Test unified state formulary (California + Texas)
+# Test unified state formulary (California + Texas + New York)
 node test-unified-formulary.js
 
 # Test California formulary only
 node test-ca-formulary.js
+
+# Test New York formulary
+node test-ny-formulary.js
+
+# Compare pricing across all 3 states (Ozempic)
+node compare-three-states-ozempic.js
 
 # Inspect CSV column structure
 node inspect-csv-columns.js

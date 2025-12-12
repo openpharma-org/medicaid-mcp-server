@@ -115,6 +115,21 @@ const DATASETS = {
     estimatedSize: '1.63 MB',
     estimatedRecords: '4,701',
     accessMethod: 'text'  // Pipe-delimited text download + in-memory cache
+  },
+
+  // New York Medicaid Formulary
+  NEW_YORK_MEDICAID_FORMULARY: {
+    id: 'ny-medicaid-formulary',
+    state: 'NY',
+    downloadUrl: 'https://docs.emedny.org/ReimbursableDrugs/MedReimbDrugsFormulary.csv',
+    name: 'New York Medicaid Pharmacy List of Reimbursable Drugs',
+    category: 'formulary',
+    update_frequency: 'daily',
+    description: 'New York Medicaid formulary with NDC codes, MRA pricing, PA requirements, and quantity limits (covers 6.5M beneficiaries - 9% of all Medicaid)',
+    cacheTime: 24 * 60 * 60 * 1000,  // 24 hours (daily updates)
+    estimatedSize: '4.97 MB',
+    estimatedRecords: '37,687',
+    accessMethod: 'csv'  // Standard CSV download + in-memory cache
   }
 };
 
@@ -133,6 +148,8 @@ function getDataset(category, purpose) {
         return DATASETS.CALIFORNIA_MEDICAID_FORMULARY;
       } else if (purpose === 'tx_formulary') {
         return DATASETS.TEXAS_MEDICAID_FORMULARY;
+      } else if (purpose === 'ny_formulary') {
+        return DATASETS.NEW_YORK_MEDICAID_FORMULARY;
       }
       return DATASETS.NADAC_2024;
 
@@ -148,6 +165,8 @@ function getDataset(category, purpose) {
         return DATASETS.CALIFORNIA_MEDICAID_FORMULARY;
       } else if (purpose === 'TX') {
         return DATASETS.TEXAS_MEDICAID_FORMULARY;
+      } else if (purpose === 'NY') {
+        return DATASETS.NEW_YORK_MEDICAID_FORMULARY;
       }
       // Default to California for backward compatibility
       return DATASETS.CALIFORNIA_MEDICAID_FORMULARY;
@@ -159,7 +178,7 @@ function getDataset(category, purpose) {
 
 /**
  * Get formulary dataset by state code
- * @param {string} state - State code (CA, TX)
+ * @param {string} state - State code (CA, TX, NY)
  * @returns {Object} Dataset configuration
  */
 function getFormularyByState(state) {
