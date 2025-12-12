@@ -85,6 +85,20 @@ const DATASETS = {
     estimatedSize: '196 MB',
     estimatedRecords: '2,085,934',
     accessMethod: 'dkan_api'  // DKAN API queries (too large for CSV, growing monthly)
+  },
+
+  // California Medicaid Formulary
+  CALIFORNIA_MEDICAID_FORMULARY: {
+    id: 'ca-medi-cal-formulary',
+    downloadUrl: 'https://medi-calrx.dhcs.ca.gov/cms/medicalrx/static-assets/documents/provider/forms-and-information/cdl/Medi-Cal_Rx_Approved_NDC_List.xlsx',
+    name: 'California Medi-Cal Rx Approved NDC List',
+    category: 'formulary',
+    update_frequency: 'monthly',
+    description: 'California Medicaid formulary with NDC codes, PA requirements, and cost ceiling tiers (covers 15M beneficiaries - 20% of all Medicaid)',
+    cacheTime: 30 * 24 * 60 * 60 * 1000,  // 30 days (monthly updates)
+    estimatedSize: '1.7 MB',
+    estimatedRecords: '40,326',
+    accessMethod: 'excel'  // Excel download + in-memory cache
   }
 };
 
@@ -99,6 +113,8 @@ function getDataset(category, purpose) {
         return DATASETS.DRUG_REBATE;
       } else if (purpose === 'ful') {
         return DATASETS.FEDERAL_UPPER_LIMITS;
+      } else if (purpose === 'ca_formulary') {
+        return DATASETS.CALIFORNIA_MEDICAID_FORMULARY;
       }
       return DATASETS.NADAC_2024;
 
@@ -107,6 +123,9 @@ function getDataset(category, purpose) {
 
     case 'utilization':
       return DATASETS.DRUG_UTILIZATION;
+
+    case 'formulary':
+      return DATASETS.CALIFORNIA_MEDICAID_FORMULARY;
 
     default:
       throw new Error(`Unknown dataset category: ${category}`);

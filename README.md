@@ -172,6 +172,17 @@ result = medicaid_info(
    }
    ```
 
+10. **search_california_formulary** - California Medi-Cal formulary search (Excel)
+    ```javascript
+    {
+      "method": "search_california_formulary",
+      "generic_name": "semaglutide",
+      "requires_pa": false,
+      "tier": "Brand",
+      "limit": 10
+    }
+    ```
+
 ## Data Sources
 
 | Dataset | Update Frequency | Size | Records | Access Method | Status |
@@ -181,8 +192,9 @@ result = medicaid_info(
 | Federal upper limits | Monthly | 196 MB | 2.1M | DKAN API | ✓ Available |
 | Drug rebate program | Quarterly | 291 MB | ~3M | DKAN API | ✓ Available |
 | Drug utilization | Quarterly | 192 MB | 5.3M | DKAN API | ✓ Available |
+| **California Medicaid formulary** | **Monthly** | **1.7 MB** | **40K** | **Excel + cache** | **✓ Available** |
 
-**Architecture**: Hybrid approach - CSV for small datasets (<50 MB), DKAN API for large datasets (>100 MB). This avoids memory issues while maintaining fast queries.
+**Architecture**: Hybrid approach - CSV/Excel for small datasets (<50 MB), DKAN API for large datasets (>100 MB). This avoids memory issues while maintaining fast queries.
 
 ## Testing
 

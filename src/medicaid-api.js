@@ -7,6 +7,7 @@
 
 const { cache } = require('./cache-manager');
 const { getDataset } = require('./datasets');
+const { downloadAndParseExcel, searchFormulary } = require('./excel-parser');
 const {
   formatDateRange,
   parseEnrollmentData,
@@ -337,12 +338,66 @@ async function searchDatasets(params) {
   }
 }
 
+/**
+ * Get California Medicaid Formulary data (downloads and caches Excel)
+ */
+async function getCaliforniaFormularyData() {
+  const dataset = getDataset('drug_pricing', 'ca_formulary');
+
+  if (!dataset.downloadUrl) {
+    throw new Error('California Formulary Excel download URL not configured');
+  }
+
+  return cache.get('CA_FORMULARY', async () => {
+    return downloadAndParseExcel(dataset.downloadUrl);
+  }, dataset.cacheTime);
+}
+
+/**
+ * Search California Medicaid Formulary
+ * @param {Object} params - Search parameters
+ * @returns {Promise<Object>} Search results
+ */
+async function searchCaliforniaFormulary(params = {}) {
+  const data = await getCaliforniaFormularyData();
+
+  const results = searchFormulary(data, {
+    ndc: params.ndc,
+    generic_name: params.generic_name,
+    label_name: params.label_name,
+    requires_pa: params.requires_pa,
+    extended_duration: params.extended_duration,
+    tier: params.tier,
+    limit: params.limit || 100
+  });
+
+  // Calculate statistics
+  const stats = {
+    total_records: data.length,
+    matching_records: results.length,
+    unique_generic_drugs: new Set(results.map(r => r.generic_name)).size,
+    pa_required_count: results.filter(r => r.prior_authorization).length,
+    extended_duration_count: results.filter(r => r.extended_duration_drug).length,
+    brand_count: results.filter(r => r.cost_ceiling_tier === 'Brand').length,
+    generic_count: results.filter(r => r.cost_ceiling_tier === 'Generic').length
+  };
+
+  return {
+    state: 'California',
+    dataset: 'Medi-Cal Rx Approved NDC List',
+    query_params: params,
+    statistics: stats,
+    results: results
+  };
+}
+
 module.exports = {
   getNADACPricing,
   compareDrugPricing,
   getEnrollmentTrends,
   compareStateEnrollment,
   getDrugRebateInfo,
+  searchCaliforniaFormulary,
   listAvailableDatasets,
   searchDatasets
 };
