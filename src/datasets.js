@@ -130,6 +130,38 @@ const DATASETS = {
     estimatedSize: '4.97 MB',
     estimatedRecords: '37,687',
     accessMethod: 'csv'  // Standard CSV download + in-memory cache
+  },
+
+  // Ohio Medicaid Formulary
+  OHIO_MEDICAID_FORMULARY: {
+    id: 'oh-spbm-formulary',
+    state: 'OH',
+    downloadUrl: 'https://spbm.medicaid.ohio.gov/SPDocumentLibrary/DocumentLibrary/Machine%20Readable%20Files/Machine%20Readable%20Formulary%2011.24.2025.json',
+    name: 'Ohio SPBM Unified Preferred Drug List',
+    category: 'formulary',
+    update_frequency: 'biweekly',
+    description: 'Ohio Medicaid formulary with NDC codes, PA requirements, step therapy, and quantity limits (covers 3.1M beneficiaries - 4% of all Medicaid)',
+    cacheTime: 14 * 24 * 60 * 60 * 1000,  // 14 days (biweekly updates)
+    estimatedSize: '34 MB',
+    estimatedRecords: '76,627',
+    accessMethod: 'json'  // JSON download + in-memory cache
+  },
+
+  // Illinois Medicaid Formulary
+  ILLINOIS_MEDICAID_FORMULARY: {
+    id: 'il-hfs-pdl',
+    state: 'IL',
+    downloadUrl: 'https://www.illinois.gov/hfs/info/legal/PublicNotices/Documents/PDL.xlsx',
+    name: 'Illinois HFS Preferred Drug List',
+    category: 'formulary',
+    update_frequency: 'quarterly',
+    description: 'Illinois Medicaid formulary (enriched via cross-state NDC matching from CA/NY - 65% coverage, covers 2.9M beneficiaries - 4% of all Medicaid)',
+    cacheTime: 90 * 24 * 60 * 60 * 1000,  // 90 days (quarterly updates)
+    estimatedSize: '222 KB',
+    estimatedRecords: '5,723',
+    accessMethod: 'excel',  // Excel download + cross-state enrichment
+    enrichmentStrategy: 'cross-state',  // Uses CA/NY formularies for NDC codes
+    enrichmentCoverage: 0.65  // 65% of drugs get NDC codes via cross-state matching
   }
 };
 
@@ -167,6 +199,10 @@ function getDataset(category, purpose) {
         return DATASETS.TEXAS_MEDICAID_FORMULARY;
       } else if (purpose === 'NY') {
         return DATASETS.NEW_YORK_MEDICAID_FORMULARY;
+      } else if (purpose === 'OH') {
+        return DATASETS.OHIO_MEDICAID_FORMULARY;
+      } else if (purpose === 'IL') {
+        return DATASETS.ILLINOIS_MEDICAID_FORMULARY;
       }
       // Default to California for backward compatibility
       return DATASETS.CALIFORNIA_MEDICAID_FORMULARY;
@@ -178,7 +214,7 @@ function getDataset(category, purpose) {
 
 /**
  * Get formulary dataset by state code
- * @param {string} state - State code (CA, TX, NY)
+ * @param {string} state - State code (CA, TX, NY, OH, IL)
  * @returns {Object} Dataset configuration
  */
 function getFormularyByState(state) {

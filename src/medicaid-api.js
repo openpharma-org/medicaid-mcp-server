@@ -10,6 +10,8 @@ const { getDataset, getFormularyByState } = require('./datasets');
 const { downloadAndParseExcel, searchFormulary } = require('./excel-parser');
 const { downloadAndParseText, searchTexasFormulary } = require('./text-parser');
 const { downloadAndParseCSV } = require('./csv-parser');
+const { downloadAndParseJSON, searchOhioFormulary } = require('./json-parser');
+const { getEnrichedIllinoisFormulary, searchIllinoisFormulary } = require('./illinois-enrichment');
 const {
   formatDateRange,
   parseEnrollmentData,
@@ -352,6 +354,11 @@ async function getStateFormularyData(state) {
     throw new Error(`${state} Formulary download URL not configured`);
   }
 
+  // Illinois uses cross-state enrichment strategy
+  if (state.toUpperCase() === 'IL') {
+    return getEnrichedIllinoisFormulary();
+  }
+
   const cacheKey = `${state}_FORMULARY`;
 
   return cache.get(cacheKey, async () => {
@@ -361,6 +368,8 @@ async function getStateFormularyData(state) {
       return downloadAndParseText(dataset.downloadUrl);
     } else if (dataset.accessMethod === 'csv') {
       return downloadAndParseCSV(dataset.downloadUrl);
+    } else if (dataset.accessMethod === 'json') {
+      return downloadAndParseJSON(dataset.downloadUrl);
     } else {
       throw new Error(`Unsupported access method: ${dataset.accessMethod}`);
     }
@@ -443,7 +452,7 @@ function searchNewYorkFormulary(data, params) {
 /**
  * Search State Medicaid Formulary (unified method for all states)
  * @param {Object} params - Search parameters
- * @param {string} params.state - State code (CA, TX, NY) - REQUIRED
+ * @param {string} params.state - State code (CA, TX, NY, OH, IL) - REQUIRED
  * @param {string} params.ndc - NDC code filter
  * @param {string} params.generic_name - Generic name filter
  * @param {string} params.label_name - Brand/label name filter
@@ -568,6 +577,30 @@ async function searchStateFormulary(params = {}) {
       min_price: params.min_price,
       limit: params.limit || 100
     });
+  } else if (stateUpper === 'OH') {
+    // Ohio formulary search
+    results = searchOhioFormulary(data, {
+      ndc: params.ndc,
+      generic_name: params.generic_name,
+      label_name: params.label_name,
+      requires_pa: params.requires_pa,
+      step_therapy: params.step_therapy,
+      has_quantity_limit: params.has_quantity_limit,
+      is_brand: params.is_brand,
+      otc: params.otc,
+      limit: params.limit || 100
+    });
+  } else if (stateUpper === 'IL') {
+    // Illinois formulary search (enriched with CA/NY NDC codes)
+    results = searchIllinoisFormulary(data, {
+      ndc: params.ndc,
+      generic_name: params.generic_name,
+      label_name: params.label_name,
+      requires_pa: params.requires_pa,
+      match_confidence: params.match_confidence,
+      has_ndc: params.has_ndc,
+      limit: params.limit || 100
+    });
   } else {
     throw new Error(`Search not implemented for state: ${stateUpper}`);
   }
@@ -630,9 +663,29 @@ async function searchStateFormulary(params = {}) {
     }
   }
 
+  // Add OH-specific stats
+  if (stateUpper === 'OH') {
+    stats.brand_count = results.filter(r => r.is_brand).length;
+    stats.generic_count = results.filter(r => r.is_generic).length;
+    stats.step_therapy_count = results.filter(r => r.step_therapy !== null).length;
+    stats.quantity_limit_count = results.filter(r => r.quantity_limit !== null).length;
+    stats.otc_count = results.filter(r => r.is_otc).length;
+  }
+
+  // Add IL-specific stats (cross-state enrichment metrics)
+  if (stateUpper === 'IL') {
+    stats.with_ndc_count = results.filter(r => r.ndc !== null).length;
+    stats.without_ndc_count = results.filter(r => r.ndc === null).length;
+    stats.enrichment_rate = ((stats.with_ndc_count / results.length) * 100).toFixed(1) + '%';
+    stats.ca_source_count = results.filter(r => r.ndc_source === 'CA').length;
+    stats.ny_source_count = results.filter(r => r.ndc_source === 'NY').length;
+    stats.high_confidence_count = results.filter(r => r.match_confidence === 'high').length;
+    stats.medium_confidence_count = results.filter(r => r.match_confidence === 'medium').length;
+  }
+
   return {
     state: stateUpper,
-    state_name: stateUpper === 'CA' ? 'California' : stateUpper === 'TX' ? 'Texas' : stateUpper === 'NY' ? 'New York' : stateUpper,
+    state_name: stateUpper === 'CA' ? 'California' : stateUpper === 'TX' ? 'Texas' : stateUpper === 'NY' ? 'New York' : stateUpper === 'OH' ? 'Ohio' : stateUpper === 'IL' ? 'Illinois' : stateUpper,
     dataset: dataset.name,
     query_params: params,
     statistics: stats,
