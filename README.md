@@ -172,7 +172,7 @@ result = medicaid_info(
    }
    ```
 
-10. **search_state_formulary** - Unified state formulary search (CA, TX)
+10. **search_state_formulary** - Unified state formulary search with **AUTOMATIC PRICING** (CA, TX)
     ```javascript
     {
       "method": "search_state_formulary",
@@ -182,6 +182,13 @@ result = medicaid_info(
       "limit": 10
     }
     ```
+
+    **✨ NEW: Automatic Pricing Integration**:
+    - **California**: Auto-joins NADAC pricing data (no special parameters needed!)
+      - Returns: `nadac_per_unit`, `ca_estimated_reimbursement`, `ca_dispensing_fee`
+      - Formula: `(NADAC × package size) + $10.05 dispensing fee`
+    - **Texas**: Native state pricing (already included)
+      - Returns: `retail_price`, `price_340b`, `ltc_price`, `specialty_price`
 
     **California-specific parameters**:
     - `tier` - Cost ceiling tier ("Brand" or "Generic")
@@ -193,6 +200,31 @@ result = medicaid_info(
     - `program` - Program filter ("medicaid", "chip", "cshcn", "khc", "htw", "htwplus")
     - `max_price` - Maximum retail price
     - `min_price` - Minimum retail price
+
+    **Example Response (California with NADAC pricing)**:
+    ```javascript
+    {
+      "state": "CA",
+      "statistics": {
+        "matching_records": 3,
+        "with_pricing_count": 3,
+        "avg_ca_reimbursement": "280.90",
+        "avg_nadac_per_unit": "211.16"
+      },
+      "results": [{
+        "ndc": "00169430330",
+        "label_name": "RYBELSUS 3 MG TABLET",
+        "generic_name": "SEMAGLUTIDE",
+        "tier": "Brand",
+        "prior_authorization": false,
+        "nadac_per_unit": 31.15,
+        "nadac_pricing_unit": "EA",
+        "ca_estimated_reimbursement": 41.20,
+        "ca_dispensing_fee": 10.05,
+        "nadac_effective_date": "12/18/2024"
+      }]
+    }
+    ```
 
 11. **search_california_formulary** - California formulary (backward compatibility)
     ```javascript

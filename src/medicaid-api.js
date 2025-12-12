@@ -397,6 +397,74 @@ async function searchStateFormulary(params = {}) {
       tier: params.tier,
       limit: params.limit || 100
     });
+
+    // AUTO-JOIN NADAC PRICING FOR CALIFORNIA
+    // California doesn't publish pricing in formulary, so we enrich with NADAC data
+    if (results.length > 0) {
+      try {
+        // Get NADAC data for all NDCs in results
+        const nadacData = await getNADACData();
+
+        // Create NADAC lookup map (use most recent record for each NDC)
+        const nadacMap = new Map();
+        nadacData.forEach(record => {
+          const ndc = (record['NDC'] || '').replace(/-/g, '');
+          const existing = nadacMap.get(ndc);
+          const effectiveDate = record['Effective Date'] || '';
+
+          if (!existing || effectiveDate > existing.effective_date) {
+            nadacMap.set(ndc, {
+              nadac_per_unit: parseFloat(record['NADAC Per Unit']) || null,
+              pricing_unit: record['Pricing Unit'] || null,
+              effective_date: effectiveDate,
+              package_size: record['Package Size'] || null,
+              description: record['NDC Description'] || null
+            });
+          }
+        });
+
+        // Enrich California results with NADAC pricing
+        const caDispensingFee = 10.05; // High volume pharmacy
+        results = results.map(product => {
+          const ndc = (product.ndc || '').replace(/-/g, '');
+          const nadac = nadacMap.get(ndc);
+
+          if (nadac && nadac.nadac_per_unit) {
+            // Try to determine package size from description
+            const description = product.label_name || nadac.description || '';
+            let packageSize = 1.0; // Default
+
+            // Parse package size from description (e.g., "1.5 ML", "3 ML")
+            const mlMatch = description.match(/([\d.]+)\s*ML/i);
+            if (mlMatch) {
+              packageSize = parseFloat(mlMatch[1]);
+            }
+
+            // Calculate California Medicaid reimbursement
+            const estimatedReimbursement = (nadac.nadac_per_unit * packageSize) + caDispensingFee;
+
+            return {
+              ...product,
+              // NADAC pricing fields
+              nadac_per_unit: nadac.nadac_per_unit,
+              nadac_pricing_unit: nadac.pricing_unit,
+              nadac_effective_date: nadac.effective_date,
+              nadac_package_size: packageSize,
+              // California Medicaid calculated pricing
+              ca_estimated_reimbursement: parseFloat(estimatedReimbursement.toFixed(2)),
+              ca_dispensing_fee: caDispensingFee,
+              pricing_notes: 'CA reimbursement = (NADAC per unit × package size) + dispensing fee'
+            };
+          }
+
+          return product; // No NADAC data available for this NDC
+        });
+      } catch (error) {
+        console.warn('[NADAC Integration] Failed to enrich CA formulary with pricing:', error.message);
+        // Continue without pricing data rather than failing the entire request
+      }
+    }
+
   } else if (stateUpper === 'TX') {
     results = searchTexasFormulary(data, {
       ndc: params.ndc,
@@ -427,6 +495,20 @@ async function searchStateFormulary(params = {}) {
     stats.extended_duration_count = results.filter(r => r.extended_duration_drug).length;
     stats.brand_count = results.filter(r => r.cost_ceiling_tier === 'Brand').length;
     stats.generic_count = results.filter(r => r.cost_ceiling_tier === 'Generic').length;
+    stats.with_pricing_count = results.filter(r => r.nadac_per_unit !== undefined).length;
+
+    // Calculate average pricing for products with NADAC data
+    const productsWithPricing = results.filter(r => r.ca_estimated_reimbursement !== undefined);
+    if (productsWithPricing.length > 0) {
+      stats.avg_ca_reimbursement = (
+        productsWithPricing.reduce((sum, r) => sum + r.ca_estimated_reimbursement, 0) /
+        productsWithPricing.length
+      ).toFixed(2);
+      stats.avg_nadac_per_unit = (
+        productsWithPricing.reduce((sum, r) => sum + r.nadac_per_unit, 0) /
+        productsWithPricing.length
+      ).toFixed(2);
+    }
   }
 
   // Add TX-specific stats
