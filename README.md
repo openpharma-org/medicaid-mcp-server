@@ -1,4 +1,4 @@
-# Medicaid MCP Server
+# Unofficial Medicaid MCP Server
 
 > Model Context Protocol (MCP) server for Medicaid public data access via data.medicaid.gov and state formularies
 
