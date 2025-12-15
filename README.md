@@ -23,21 +23,6 @@ Access Medicaid formularies for 5 states covering 43% of US Medicaid beneficiari
 - **Hybrid Architecture** - Optimized data access: in-memory caching for small datasets, streaming API for large datasets
 - **Automatic Pricing Integration** - Formulary queries auto-enrich with NADAC pricing data
 - **Intelligent Enrichment** - Illinois formulary enhanced via cross-state NDC matching (CA/NY/OH sources)
-- **Production-Ready** - Type-safe implementation, error handling, rate limiting, efficient caching
-
-## Installation
-
-```bash
-npm install @openpharma/medicaid-mcp-server
-```
-
-Or from source:
-
-```bash
-git clone https://github.com/openpharma-org/medicaid-mcp-server.git
-cd medicaid-mcp-server
-npm install
-```
 
 ## Usage
 
@@ -54,12 +39,6 @@ Add to your `claude_desktop_config.json`:
     }
   }
 }
-```
-
-### Other MCP Clients
-
-```bash
-node /path/to/medicaid-mcp-server/src/index.js
 ```
 
 ## API Reference
@@ -240,13 +219,6 @@ The server uses a hybrid data access strategy optimized for performance and memo
 // Returns IL formulary enriched with NDC codes from CA/NY/OH (61.7% coverage)
 ```
 
-## Testing
-
-```bash
-# Test Illinois formulary (cross-state enrichment)
-node test-illinois-formulary.js
-```
-
 ## Use Cases
 
 **Market Access & Strategy**
@@ -268,24 +240,3 @@ node test-illinois-formulary.js
 - Provider-level utilization data not available (use Medicare MCP for provider analytics)
 - Individual beneficiary claims require CMS Data Use Agreement (T-MSIS/TAF)
 - No HCPCS procedure-level analysis (state-level aggregate data only)
-
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Run tests
-npm test
-
-# Start server
-npm start
-```
-
-## License
-
-MIT
-
-## Author
-
-OpenPharma Organization
