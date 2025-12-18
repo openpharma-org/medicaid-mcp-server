@@ -13,9 +13,11 @@ const {
   getEnrollmentTrends,
   compareStateEnrollment,
   getDrugRebateInfo,
+  searchStateFormulary,
   listAvailableDatasets,
   searchDatasets
 } = require('./medicaid-api.js');
+const { queryDrugUtilization, queryFederalUpperLimits } = require('./dkan-api.js');
 
 const server = new Server(
   {
@@ -47,11 +49,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 'get_enrollment_trends',
                 'compare_state_enrollment',
                 'get_drug_rebate_info',
+                'search_state_formulary',
+                'get_drug_utilization',
+                'get_federal_upper_limits',
                 'list_available_datasets',
                 'search_datasets'
               ],
-              description: 'The operation to perform: get_nadac_pricing (NADAC drug pricing lookup), compare_drug_pricing (multi-drug or temporal comparison), get_enrollment_trends (state monthly enrollment), compare_state_enrollment (multi-state comparison), get_drug_rebate_info (rebate program data), list_available_datasets (dataset catalog), search_datasets (custom SoQL query)',
-              examples: ['get_nadac_pricing', 'get_enrollment_trends', 'compare_state_enrollment']
+              description: 'The operation to perform: get_nadac_pricing (drug pricing), compare_drug_pricing (multi-drug comparison), get_enrollment_trends (state enrollment), compare_state_enrollment (multi-state comparison), get_drug_rebate_info (rebate program), search_state_formulary (CA/NY/TX/OH/IL formularies), get_drug_utilization (state prescriptions), get_federal_upper_limits (FUL pricing), list_available_datasets (catalog), search_datasets (custom query)',
+              examples: ['get_nadac_pricing', 'search_state_formulary', 'get_drug_rebate_info']
             },
             state: {
               type: 'string',
@@ -183,6 +188,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'get_drug_rebate_info':
         result = await getDrugRebateInfo(params);
+        break;
+
+      case 'search_state_formulary':
+        result = await searchStateFormulary(params);
+        break;
+
+      case 'get_drug_utilization':
+        result = await queryDrugUtilization(params);
+        break;
+
+      case 'get_federal_upper_limits':
+        result = await queryFederalUpperLimits(params);
         break;
 
       case 'list_available_datasets':

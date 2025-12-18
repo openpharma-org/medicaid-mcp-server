@@ -35,7 +35,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "medicaid": {
       "command": "node",
-      "args": ["/path/to/medicaid-mcp-server/src/index.js"]
+      "args": ["/path/to/medicaid-mcp-server/build/index.js"]
     }
   }
 }
@@ -125,7 +125,7 @@ New York:
 ```javascript
 {
   "method": "get_drug_rebate_info",
-  "ndc": "00002143380",
+  "drug_name": "ozempic",  // or labeler_name: "novo nordisk"
   "limit": 10
 }
 ```
@@ -134,7 +134,7 @@ New York:
 
 ```javascript
 {
-  "method": "get_state_drug_utilization",
+  "method": "get_drug_utilization",
   "state": "CA",
   "drug_name": "OZEMPIC",
   "year": 2024,

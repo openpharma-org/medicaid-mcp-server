@@ -120,8 +120,11 @@ async function queryDrugUtilization(params) {
 async function queryDrugRebate(params) {
   const datasetId = '0ad65fe5-3ad3-5d79-a3f9-7893ded7963a'; // Drug rebate
 
+  // Fetch larger batch for client-side filtering since we can't filter server-side
+  const fetchLimit = params.drug_name || params.labeler_name ? 5000 : (params.limit || 100);
+
   const response = await queryDKAN(datasetId, {
-    limit: params.limit || 100,
+    limit: fetchLimit,
     offset: params.offset || 0
   });
 
@@ -129,13 +132,14 @@ async function queryDrugRebate(params) {
 
   // Client-side filtering
   if (params.ndc) {
-    results = results.filter(r => r.ndc === params.ndc);
+    const normalizedNdc = params.ndc.replace(/-/g, '');
+    results = results.filter(r => (r.ndc || '').replace(/-/g, '') === normalizedNdc);
   }
 
   if (params.drug_name) {
     const drugLower = params.drug_name.toLowerCase();
     results = results.filter(r =>
-      (r.drug_name || '').toLowerCase().includes(drugLower)
+      (r.fda_product_name || '').toLowerCase().includes(drugLower)
     );
   }
 
@@ -146,18 +150,28 @@ async function queryDrugRebate(params) {
     );
   }
 
+  // Limit to user's requested limit
+  const userLimit = params.limit || 100;
+  results = results.slice(0, userLimit);
+
   return {
     data: results.map(r => ({
       ndc: r.ndc,
-      drug_name: r.drug_name,
+      fda_product_name: r.fda_product_name,
       labeler_name: r.labeler_name,
+      labeler_code: r.labeler_code,
+      drug_category: r.drug_category,
+      drug_type_indicator: r.drug_type_indicator,
       fda_approval_date: r.fda_approval_date,
       market_date: r.market_date,
+      termination_date: r.termination_date,
       unit_type: r.unit_type,
-      units_per_package_size: r.units_per_package_size,
-      innovator_multiple_source_code: r.innovator_multiple_source_code,
-      rx_otc_indicator: r.rx_otc_indicator,
-      therapeutic_equivalence_code: r.therapeutic_equivalence_code
+      units_per_pkg_size: r.units_per_pkg_size,
+      fda_therapeutic_equivalence_code: r.fda_therapeutic_equivalence_code,
+      clotting_factor_indicator: r.clotting_factor_indicator,
+      pediatric_indicator: r.pediatric_indicator,
+      year: r.year,
+      quarter: r.quarter
     })),
     meta: {
       total_count: response.count,

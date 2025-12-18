@@ -15,7 +15,7 @@ const { downloadAndParseExcel } = require('./excel-parser');
 const { downloadAndParseCSV } = require('./csv-parser');
 const { downloadAndParseJSON } = require('./json-parser');
 const { cache } = require('./cache-manager');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const axios = require('axios');
 
 /**
@@ -245,21 +245,24 @@ async function downloadIllinoisPDL(url) {
 
   console.log(`[IL Enrichment] Downloaded ${response.data.byteLength} bytes`);
 
-  // Parse Excel workbook
-  const workbook = XLSX.read(response.data, { type: 'buffer' });
+  // Parse Excel workbook with ExcelJS
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(response.data);
 
   // Get "Published PDL" sheet
-  const sheetName = 'Published PDL';
-  if (!workbook.SheetNames.includes(sheetName)) {
-    throw new Error(`Sheet "${sheetName}" not found in Illinois PDL Excel file`);
+  const sheet = workbook.getWorksheet('Published PDL');
+  if (!sheet) {
+    throw new Error('Sheet "Published PDL" not found in Illinois PDL Excel file');
   }
 
-  const sheet = workbook.Sheets[sheetName];
-
   // Convert to array of arrays (row-based)
-  const rows = XLSX.utils.sheet_to_json(sheet, {
-    header: 1,  // Return as array of arrays
-    defval: ''
+  const rows = [];
+  sheet.eachRow((row, rowNumber) => {
+    const rowValues = [];
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      rowValues[colNumber - 1] = cell.value !== null && cell.value !== undefined ? cell.value : '';
+    });
+    rows.push(rowValues);
   });
 
   console.log(`[IL Enrichment] Parsed ${rows.length} rows from Illinois PDL`);

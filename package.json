@@ -2,20 +2,21 @@
   "name": "@openpharma-org/medicaid-mcp-server",
   "version": "0.1.0",
   "description": "MCP server for Medicaid public data access via data.medicaid.gov Socrata SODA API. Provides enrollment trends, drug pricing (NADAC), quality measures, and program performance indicators from CMS Medicaid open data.",
-  "main": "src/index.js",
+  "main": "build/index.js",
   "bin": {
-    "medicaid-mcp-server": "src/index.js"
+    "medicaid-mcp-server": "build/index.js"
   },
   "files": [
-    "src/",
+    "build",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node src/index.js",
-    "build": "mkdir -p dist && cp -r src/* dist/",
-    "prebuild": "rm -rf dist"
+    "start": "node build/index.js",
+    "dev": "node src/index.js",
+    "build": "rm -rf build && mkdir -p build && cp src/*.js build/",
+    "clean": "rm -rf build"
   },
   "keywords": [
     "mcp",
@@ -47,7 +48,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.15.0",
     "axios": "^1.10.0",
-    "xlsx": "^0.18.5"
+    "exceljs": "^4.4.0"
   },
   "engines": {
     "node": ">=18.0.0"

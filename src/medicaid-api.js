@@ -24,6 +24,7 @@ const {
   validateStateCode,
   formatResponse
 } = require('./utils');
+const { queryDrugRebate, queryDrugUtilization, queryFederalUpperLimits } = require('./dkan-api');
 
 /**
  * Get NADAC data (downloads and caches CSV)
@@ -282,18 +283,28 @@ async function compareStateEnrollment(params) {
 }
 
 /**
- * Get drug rebate information
- * NOTE: Not implemented yet - need CSV download URL
+ * Get drug rebate information via DKAN API
+ * Queries the Medicaid Drug Rebate Program dataset
  */
 async function getDrugRebateInfo(params) {
   const dataset = getDataset('drug_pricing', 'rebate');
 
-  if (!dataset.downloadUrl) {
-    throw new Error('Drug rebate data not yet implemented - CSV download URL needed');
-  }
+  // Use DKAN API for large dataset
+  const result = await queryDrugRebate({
+    ndc: params.ndc_code,
+    drug_name: params.drug_name,
+    labeler_name: params.labeler_name,
+    limit: params.limit || 100,
+    offset: params.offset || 0
+  });
 
-  // TODO: Implement when CSV URL is available
-  throw new Error('Drug rebate data coming in Phase 2');
+  return formatResponse(result.data, {
+    dataset: dataset.name,
+    total_count: result.meta.total_count,
+    returned_count: result.meta.returned_count,
+    query_type: 'drug_rebate',
+    source: 'DKAN API'
+  });
 }
 
 /**

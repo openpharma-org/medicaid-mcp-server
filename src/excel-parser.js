@@ -4,7 +4,7 @@
  * Parses the Medi-Cal Rx Approved NDC List Excel file
  */
 
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const axios = require('axios');
 
 /**
@@ -23,27 +23,30 @@ async function downloadAndParseExcel(url) {
 
   console.log(`[Excel Parser] Downloaded ${response.data.byteLength} bytes`);
 
-  // Parse Excel workbook
-  const workbook = XLSX.read(response.data, { type: 'buffer' });
+  // Parse Excel workbook with ExcelJS
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(response.data);
 
   // Get NDC sheet
-  const sheetName = 'NDC';
-  if (!workbook.SheetNames.includes(sheetName)) {
-    throw new Error(`Sheet "${sheetName}" not found in Excel file`);
+  const sheet = workbook.getWorksheet('NDC');
+  if (!sheet) {
+    throw new Error('Sheet "NDC" not found in Excel file');
   }
 
-  const sheet = workbook.Sheets[sheetName];
-
-  // Convert to JSON - get all data including headers
-  const allData = XLSX.utils.sheet_to_json(sheet, {
-    header: 1,  // Return as array of arrays
-    defval: null
+  // Convert to array of arrays
+  const allData = [];
+  sheet.eachRow((row, rowNumber) => {
+    const rowValues = [];
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      rowValues[colNumber - 1] = cell.value;
+    });
+    allData.push(rowValues);
   });
 
   // Find the header row (contains 'Product ID')
   let headerRowIndex = -1;
   for (let i = 0; i < Math.min(10, allData.length); i++) {
-    if (allData[i][0] === 'Product ID') {
+    if (allData[i] && allData[i][0] === 'Product ID') {
       headerRowIndex = i;
       break;
     }
