@@ -26,10 +26,6 @@ Access Medicaid formularies for 5 states covering 43% of US Medicaid beneficiari
 
 ## Usage
 
-### Claude Desktop
-
-Add to your `claude_desktop_config.json`:
-
 ```json
 {
   "mcpServers": {
